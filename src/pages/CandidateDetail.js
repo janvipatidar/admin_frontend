@@ -2,9 +2,12 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
+import toast from 'react-hot-toast';
+
 import api from '../api/api';
 import Layout from '../components/Layout';
 import StatusBadge from '../components/StatusBadge';
+import { getResumeFileName, getResumeUrl } from '../utils/mediaUrl';
 
 const STATUS_OPTIONS = [
   'Applied',
@@ -54,9 +57,11 @@ const CandidateDetail = () => {
       const res = await api.put(`/api/admin/candidate/${id}`, { status, notes });
       setCandidate(res.data.candidate);
       setSavedMsg('Saved');
+      toast.success('Changes saved');
       setTimeout(() => setSavedMsg(''), 1500);
     } catch (err) {
       setError('Failed to save');
+      toast.error('Failed to save changes');
     } finally {
       setSaving(false);
     }
@@ -66,9 +71,11 @@ const CandidateDetail = () => {
     if (!window.confirm('Delete this candidate? This cannot be undone.')) return;
     try {
       await api.delete(`/api/admin/candidate/${id}`);
+      toast.success('Candidate deleted');
       navigate('/admin/candidates', { replace: true });
     } catch (err) {
       setError('Failed to delete');
+      toast.error('Failed to delete candidate');
     }
   };
 
@@ -117,6 +124,8 @@ const CandidateDetail = () => {
               <Info label="Current Employer" value={candidate.currentEmployer} />
               <Info label="Previous Employer" value={candidate.previousEmployer} />
               <Info label="Industry" value={candidate.currentIndustry} />
+              <Info label="State" value={candidate.state} />
+              <Info label="City" value={candidate.city} />
               <Info label="Location" value={candidate.location} />
               <Info
                 label="Expected Salary"
@@ -150,9 +159,19 @@ const CandidateDetail = () => {
           <div className="card">
             <div className="card-header"><h3>Resume</h3></div>
             {candidate.resumeUrl ? (
-              <a href={candidate.resumeUrl} target="_blank" rel="noreferrer" className="btn btn-outline">
-                Open Resume ↗
-              </a>
+              <div className="resume-block">
+                <p className="muted" style={{ marginBottom: 8 }}>
+                  File: <strong>{getResumeFileName(candidate.resumeUrl)}</strong>
+                </p>
+                <a
+                  href={getResumeUrl(candidate.resumeUrl)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn btn-primary"
+                >
+                  View / Download Resume ↗
+                </a>
+              </div>
             ) : (
               <span className="muted">No resume uploaded</span>
             )}

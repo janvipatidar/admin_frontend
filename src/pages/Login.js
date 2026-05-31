@@ -2,6 +2,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import toast from 'react-hot-toast';
+
 import api from '../api/api';
 
 const Login = () => {
@@ -19,12 +21,14 @@ const Login = () => {
       const res = await api.post('/api/admin/login', { email, password });
       localStorage.setItem('token', res.data.token);
       localStorage.setItem('admin', JSON.stringify(res.data.admin));
+      toast.success('Welcome back!');
       navigate('/admin/dashboard', { replace: true });
     } catch (err) {
-      setError(
+      const msg =
         (err.response && err.response.data && err.response.data.message) ||
-          'Login failed. Please try again.'
-      );
+        'Login failed. Please try again.';
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }

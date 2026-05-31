@@ -1,9 +1,11 @@
 // Manual candidate entry from the admin side
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 
 import api from '../api/api';
 import Layout from '../components/Layout';
+import { validateCandidateForm } from '../utils/validation';
 
 const STATUS_OPTIONS = [
   'Applied',
@@ -46,16 +48,25 @@ const AddCandidate = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+
+    const validationErrors = validateCandidateForm(form);
+    if (validationErrors.length) {
+      validationErrors.forEach((msg) => toast.error(msg));
+      return;
+    }
+
     setSaving(true);
     try {
       const res = await api.post('/api/admin/candidate', form);
       const id = res.data.candidate && res.data.candidate._id;
+      toast.success('Candidate created');
       navigate(id ? `/admin/candidate/${id}` : '/admin/candidates');
     } catch (err) {
-      setError(
+      const msg =
         (err.response && err.response.data && err.response.data.message) ||
-          'Failed to create candidate'
-      );
+        'Failed to create candidate';
+      setError(msg);
+      toast.error(msg);
     } finally {
       setSaving(false);
     }

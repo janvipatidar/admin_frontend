@@ -1,8 +1,9 @@
 // Candidates list page - search, filters, pagination, Excel export
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
+import toast from 'react-hot-toast';
 
 import api from '../api/api';
 import Layout from '../components/Layout';
@@ -38,6 +39,7 @@ const initialFilters = {
 };
 
 const Candidates = () => {
+  const importInputRef = useRef(null);
   const [keyword, setKeyword] = useState('');
   const [filters, setFilters] = useState(initialFilters);
   const [page, setPage] = useState(1);
@@ -67,6 +69,7 @@ const Candidates = () => {
       setPagination(res.data.pagination);
     } catch (err) {
       setError('Failed to fetch candidates');
+      toast.error('Failed to fetch candidates');
     } finally {
       setLoading(false);
     }
@@ -108,11 +111,11 @@ const Candidates = () => {
 
     // 1) Verify the libraries actually loaded
     if (!XLSX || !XLSX.utils) {
-      alert('xlsx library is not loaded. Run "npm install" in the frontend folder and restart npm start.');
+      toast.error('Excel library not loaded. Run npm install and restart.');
       return;
     }
     if (typeof saveAs !== 'function') {
-      alert('file-saver is not loaded. Run "npm install" in the frontend folder and restart npm start.');
+      toast.error('Download library not loaded. Run npm install and restart.');
       return;
     }
 
@@ -129,12 +132,12 @@ const Candidates = () => {
         (err.response && err.response.data && err.response.data.message) ||
         err.message ||
         'unknown error';
-      alert('Could not fetch candidates from the API: ' + msg);
+      toast.error('Could not fetch candidates: ' + msg);
       return;
     }
 
     if (rows.length === 0) {
-      alert('No candidates to export with the current filters.');
+      toast.error('No candidates to export with the current filters.');
       return;
     }
 
@@ -153,6 +156,8 @@ const Candidates = () => {
           'Current Employer': c.currentEmployer || '',
           'Previous Employer': c.previousEmployer || '',
           Industry: c.currentIndustry || '',
+          State: c.state || '',
+          City: c.city || '',
           Location: c.location || '',
           'Expected Salary': c.expectedSalary != null ? c.expectedSalary : '',
           Skills: Array.isArray(c.keySkills) ? c.keySkills.join(', ') : '',
@@ -173,10 +178,46 @@ const Candidates = () => {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
       });
       saveAs(blob, `candidates-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      toast.success(`Exported ${rows.length} candidate(s)`);
       console.log('[export] saveAs invoked');
     } catch (err) {
       console.error('[export] build failed:', err);
-      alert('Building the Excel file failed: ' + (err.message || 'unknown error'));
+      toast.error('Building the Excel file failed');
+    }
+  };
+
+  const importExcel = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    try {
+      const buffer = await file.arrayBuffer();
+      const wb = XLSX.read(buffer, { type: 'array' });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet);
+
+      if (!rows.length) {
+        toast.error('Excel file has no data rows');
+        return;
+      }
+
+      const res = await api.post('/api/admin/candidates/import', { candidates: rows });
+      toast.success(res.data.message || 'Import completed');
+
+      if (res.data.failed > 0) {
+        toast.error(`${res.data.failed} row(s) could not be imported`);
+        console.warn('Import failures:', res.data.failures);
+      }
+
+      fetchCandidates();
+    } catch (err) {
+      const msg =
+        (err.response && err.response.data && err.response.data.message) ||
+        err.message ||
+        'Import failed';
+      toast.error(msg);
+    } finally {
+      e.target.value = '';
     }
   };
 
@@ -190,7 +231,23 @@ const Candidates = () => {
           </p>
         </div>
         <div className="page-header-actions">
-          <button className="btn btn-outline" onClick={exportExcel}>Export Excel</button>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            style={{ display: 'none' }}
+            onChange={importExcel}
+          />
+          <button
+            type="button"
+            className="btn btn-outline"
+            onClick={() => importInputRef.current && importInputRef.current.click()}
+          >
+            Import Excel
+          </button>
+          <button type="button" className="btn btn-outline" onClick={exportExcel}>
+            Export Excel
+          </button>
           <Link to="/admin/candidate/new" className="btn btn-primary">+ Add Candidate</Link>
         </div>
       </div>
