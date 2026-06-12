@@ -33,6 +33,9 @@ const Sidebar = () => {
         <NavLink to="/admin/candidates" className={linkClass}>
           <span className="nav-icon">☰</span> Candidates
         </NavLink>
+        <NavLink to="/admin/candidates/search" className={linkClass}>
+          <span className="nav-icon">⌕</span> Search
+        </NavLink>
         <NavLink to="/admin/contacts" className={linkClass}>
           <span className="nav-icon">✉</span> Contact Messages
         </NavLink>

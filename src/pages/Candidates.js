@@ -1,155 +1,113 @@
-// Candidates list page - search, filters, pagination, Excel export
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+// Candidate management — table, add, search, delete, import/export
+import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 import toast from 'react-hot-toast';
 
 import api from '../api/api';
+import ConfirmModal from '../components/ConfirmModal';
 import Layout from '../components/Layout';
 import Pagination from '../components/Pagination';
-import StatusBadge from '../components/StatusBadge';
-
-const STATUS_OPTIONS = [
-  'Applied',
-  'Shortlisted',
-  'Interview',
-  'Selected',
-  'Rejected',
-  'On Hold'
-];
-
-const NOTICE_PERIOD_OPTIONS = [
-  'Immediate',
-  '15 days',
-  '30 days',
-  '60 days',
-  '90 days'
-];
-
-const initialFilters = {
-  status: '',
-  experienceMin: '',
-  experienceMax: '',
-  location: '',
-  industry: '',
-  education: '',
-  noticePeriod: '',
-  skills: ''
-};
+import { getResumeFileName, getResumeUrl } from '../utils/mediaUrl';
 
 const Candidates = () => {
   const importInputRef = useRef(null);
-  const [keyword, setKeyword] = useState('');
-  const [filters, setFilters] = useState(initialFilters);
   const [page, setPage] = useState(1);
   const [limit] = useState(10);
-
   const [data, setData] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0 });
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  // Build the query string from the controlled state
-  const queryParams = useMemo(() => {
-    const params = { page, limit };
-    if (keyword) params.keyword = keyword;
-    Object.entries(filters).forEach(([k, v]) => {
-      if (v !== '' && v !== null && v !== undefined) params[k] = v;
-    });
-    return params;
-  }, [keyword, filters, page, limit]);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [deleteModal, setDeleteModal] = useState({ open: false, mode: 'single', id: null, count: 0 });
+  const [deleting, setDeleting] = useState(false);
 
   const fetchCandidates = async () => {
     setLoading(true);
-    setError('');
     try {
-      const res = await api.get('/api/admin/candidates', { params: queryParams });
+      const res = await api.get('/api/admin/candidates', { params: { page, limit } });
       setData(res.data.data);
       setPagination(res.data.pagination);
+      setSelectedIds([]);
     } catch (err) {
-      setError('Failed to fetch candidates');
       toast.error('Failed to fetch candidates');
     } finally {
       setLoading(false);
     }
   };
 
-  // Re-fetch whenever query params change
   useEffect(() => {
     fetchCandidates();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, limit]);
 
-  const handleSearchSubmit = (e) => {
-    e.preventDefault();
-    setPage(1);
-    fetchCandidates();
+  const toggleSelectAll = (e) => {
+    if (e.target.checked) {
+      setSelectedIds(data.map((c) => c._id));
+    } else {
+      setSelectedIds([]);
+    }
   };
 
-  const handleFilterChange = (key, value) => {
-    setFilters((prev) => ({ ...prev, [key]: value }));
+  const toggleSelect = (id) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
   };
 
-  const applyFilters = () => {
-    setPage(1);
-    fetchCandidates();
+  const openSingleDelete = (id) => {
+    setDeleteModal({ open: true, mode: 'single', id, count: 1 });
   };
 
-  const clearFilters = () => {
-    setFilters(initialFilters);
-    setKeyword('');
-    setPage(1);
-    // Use timeout-free direct fetch with cleared state
-    setTimeout(fetchCandidates, 0);
-  };
-
-  // Excel export — pulls the full filtered set from the API and builds the
-  // .xlsx in the browser using SheetJS + file-saver.
-  const exportExcel = async () => {
-    console.log('[export] start');
-
-    // 1) Verify the libraries actually loaded
-    if (!XLSX || !XLSX.utils) {
-      toast.error('Excel library not loaded. Run npm install and restart.');
+  const openBulkDelete = () => {
+    if (!selectedIds.length) {
+      toast.error('Select at least one candidate');
       return;
     }
-    if (typeof saveAs !== 'function') {
-      toast.error('Download library not loaded. Run npm install and restart.');
-      return;
-    }
+    setDeleteModal({ open: true, mode: 'bulk', id: null, count: selectedIds.length });
+  };
 
-    // 2) Fetch the data
-    let rows = [];
+  const handleConfirmDelete = async () => {
+    setDeleting(true);
     try {
-      const exportParams = { ...queryParams, page: 1, limit: 10000 };
-      const res = await api.get('/api/admin/candidates', { params: exportParams });
-      rows = (res && res.data && res.data.data) || [];
-      console.log('[export] rows:', rows.length);
+      if (deleteModal.mode === 'single') {
+        await api.delete(`/api/admin/candidate/${deleteModal.id}`);
+        toast.success('Candidate deleted');
+      } else {
+        const res = await api.post('/api/admin/candidates/bulk-delete', { ids: selectedIds });
+        toast.success(res.data.message || 'Candidates deleted');
+        if (res.data.failed > 0) {
+          toast.error(`${res.data.failed} candidate(s) could not be deleted`);
+        }
+      }
+      setDeleteModal({ open: false, mode: 'single', id: null, count: 0 });
+      fetchCandidates();
     } catch (err) {
-      console.error('[export] fetch failed:', err);
       const msg =
         (err.response && err.response.data && err.response.data.message) ||
-        err.message ||
-        'unknown error';
-      toast.error('Could not fetch candidates: ' + msg);
-      return;
+        'Delete failed';
+      toast.error(msg);
+    } finally {
+      setDeleting(false);
     }
+  };
 
-    if (rows.length === 0) {
-      toast.error('No candidates to export with the current filters.');
-      return;
-    }
-
-    // 3) Build + download the .xlsx
+  const exportExcel = async () => {
     try {
-      const formatDate = (d) => (d ? new Date(d).toLocaleDateString() : '');
+      const res = await api.get('/api/admin/candidates', { params: { page: 1, limit: 10000 } });
+      const rows = (res.data && res.data.data) || [];
+      if (!rows.length) {
+        toast.error('No candidates to export');
+        return;
+      }
 
       const ws = XLSX.utils.json_to_sheet(
         rows.map((c) => ({
           Name: c.name || '',
           Email: c.email || '',
           Phone: c.phone || '',
+          Designation: c.designation || '',
+          'Current CTC': c.currentCTC != null ? c.currentCTC : '',
           Education: c.education || '',
           'Experience (yrs)': c.experience != null ? c.experience : '',
           'Notice Period': c.noticePeriod || '',
@@ -162,75 +120,78 @@ const Candidates = () => {
           'Expected Salary': c.expectedSalary != null ? c.expectedSalary : '',
           Skills: Array.isArray(c.keySkills) ? c.keySkills.join(', ') : '',
           Status: c.status || '',
+          Active: c.isActive ? 'Yes' : 'No',
           Resume: c.resumeUrl || '',
           Notes: c.notes || '',
-          'Created At': formatDate(c.createdAt)
+          'Created At': c.createdAt ? new Date(c.createdAt).toLocaleDateString() : ''
         }))
       );
-
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Candidates');
-
-      const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-      console.log('[export] buffer bytes:', excelBuffer.byteLength);
-
-      const blob = new Blob([excelBuffer], {
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-      });
-      saveAs(blob, `candidates-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      saveAs(
+        new Blob([buffer], {
+          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        }),
+        `candidates-${new Date().toISOString().slice(0, 10)}.xlsx`
+      );
       toast.success(`Exported ${rows.length} candidate(s)`);
-      console.log('[export] saveAs invoked');
     } catch (err) {
-      console.error('[export] build failed:', err);
-      toast.error('Building the Excel file failed');
+      toast.error('Export failed');
     }
   };
 
   const importExcel = async (e) => {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
-
     try {
       const buffer = await file.arrayBuffer();
       const wb = XLSX.read(buffer, { type: 'array' });
       const sheet = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(sheet);
-
       if (!rows.length) {
         toast.error('Excel file has no data rows');
         return;
       }
-
       const res = await api.post('/api/admin/candidates/import', { candidates: rows });
       toast.success(res.data.message || 'Import completed');
-
-      if (res.data.failed > 0) {
-        toast.error(`${res.data.failed} row(s) could not be imported`);
-        console.warn('Import failures:', res.data.failures);
-      }
-
+      if (res.data.failed > 0) toast.error(`${res.data.failed} row(s) failed`);
       fetchCandidates();
     } catch (err) {
-      const msg =
-        (err.response && err.response.data && err.response.data.message) ||
-        err.message ||
-        'Import failed';
-      toast.error(msg);
+      toast.error(
+        (err.response && err.response.data && err.response.data.message) || 'Import failed'
+      );
     } finally {
       e.target.value = '';
     }
   };
 
+  const formatDate = (d) => (d ? new Date(d).toLocaleDateString() : '—');
+
   return (
     <Layout>
       <div className="page-header">
         <div>
-          <h1>Candidates</h1>
-          <p className="muted">
-            {pagination.total} total · page {pagination.page} of {pagination.totalPages}
-          </p>
+          <h1>Candidate Management</h1>
+          <p className="muted">{pagination.total} candidates in database</p>
         </div>
-        <div className="page-header-actions">
+      </div>
+
+      <div className="toolbar card">
+        <div className="toolbar-left">
+          <Link to="/admin/candidate/new" className="btn btn-primary">
+            + Add Candidate
+          </Link>
+          <Link to="/admin/candidates/search" className="btn btn-outline">
+            Search Candidate
+          </Link>
+        </div>
+        <div className="toolbar-right">
+          {selectedIds.length > 0 && (
+            <button type="button" className="btn btn-danger" onClick={openBulkDelete}>
+              Delete Selected ({selectedIds.length})
+            </button>
+          )}
           <input
             ref={importInputRef}
             type="file"
@@ -248,193 +209,126 @@ const Candidates = () => {
           <button type="button" className="btn btn-outline" onClick={exportExcel}>
             Export Excel
           </button>
-          <Link to="/admin/candidate/new" className="btn btn-primary">+ Add Candidate</Link>
         </div>
       </div>
 
-      {/* Top: keyword search */}
-      <form className="search-bar" onSubmit={handleSearchSubmit}>
-        <input
-          type="text"
-          placeholder="Search by name, email, skill, employer…"
-          value={keyword}
-          onChange={(e) => setKeyword(e.target.value)}
-        />
-        <button type="submit" className="btn btn-primary">Search</button>
-      </form>
+      {loading && <div className="loader">Loading candidates…</div>}
 
-      <div className="candidates-layout">
-        {/* Left: filters */}
-        <aside className="filters-panel">
-          <div className="filters-header">
-            <h3>Filters</h3>
-            <button type="button" className="link-btn" onClick={clearFilters}>
-              Clear
-            </button>
-          </div>
+      {!loading && data.length === 0 && (
+        <div className="empty-state card">
+          <h3>No candidates yet</h3>
+          <p>Add a candidate or import from Excel to get started.</p>
+        </div>
+      )}
 
-          <div className="filter-group">
-            <label>Status</label>
-            <select
-              value={filters.status}
-              onChange={(e) => handleFilterChange('status', e.target.value)}
-            >
-              <option value="">All</option>
-              {STATUS_OPTIONS.map((s) => (
-                <option key={s} value={s}>{s}</option>
+      {!loading && data.length > 0 && (
+        <div className="table-wrap card">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th style={{ width: 40 }}>
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.length === data.length && data.length > 0}
+                    onChange={toggleSelectAll}
+                    aria-label="Select all"
+                  />
+                </th>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Mobile</th>
+                <th>Skills</th>
+                <th>Exp.</th>
+                <th>Designation</th>
+                <th>Current CTC</th>
+                <th>Location</th>
+                <th>Resume</th>
+                <th>Created</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.map((c) => (
+                <tr key={c._id}>
+                  <td>
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(c._id)}
+                      onChange={() => toggleSelect(c._id)}
+                      aria-label={`Select ${c.name}`}
+                    />
+                  </td>
+                  <td>
+                    <div className="cell-primary">{c.name}</div>
+                  </td>
+                  <td>{c.email}</td>
+                  <td>{c.phone}</td>
+                  <td>
+                    <div className="skill-chips">
+                      {(c.keySkills || []).slice(0, 2).map((s) => (
+                        <span key={s} className="chip">{s}</span>
+                      ))}
+                      {(c.keySkills || []).length > 2 && (
+                        <span className="chip chip-muted">+{c.keySkills.length - 2}</span>
+                      )}
+                    </div>
+                  </td>
+                  <td>{c.experience} yrs</td>
+                  <td>{c.designation || '—'}</td>
+                  <td>{c.currentCTC ? `${c.currentCTC} LPA` : '—'}</td>
+                  <td>{c.location || c.city || '—'}</td>
+                  <td>
+                    {c.resumeUrl ? (
+                      <a
+                        href={getResumeUrl(c.resumeUrl)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="link-btn"
+                      >
+                        {getResumeFileName(c.resumeUrl)}
+                      </a>
+                    ) : (
+                      '—'
+                    )}
+                  </td>
+                  <td>{formatDate(c.createdAt)}</td>
+                  <td>
+                    <div className="row-actions">
+                      <Link to={`/admin/candidate/${c._id}`} className="btn btn-outline btn-sm">
+                        View
+                      </Link>
+                      <button
+                        type="button"
+                        className="btn btn-danger btn-sm"
+                        onClick={() => openSingleDelete(c._id)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </td>
+                </tr>
               ))}
-            </select>
-          </div>
+            </tbody>
+          </table>
+        </div>
+      )}
 
-          <div className="filter-group">
-            <label>Experience (years)</label>
-            <div className="range-row">
-              <input
-                type="number"
-                min="0"
-                placeholder="Min"
-                value={filters.experienceMin}
-                onChange={(e) => handleFilterChange('experienceMin', e.target.value)}
-              />
-              <input
-                type="number"
-                min="0"
-                placeholder="Max"
-                value={filters.experienceMax}
-                onChange={(e) => handleFilterChange('experienceMax', e.target.value)}
-              />
-            </div>
-          </div>
+      <Pagination page={pagination.page} totalPages={pagination.totalPages} onChange={setPage} />
 
-          <div className="filter-group">
-            <label>Location</label>
-            <input
-              type="text"
-              placeholder="e.g. Bangalore"
-              value={filters.location}
-              onChange={(e) => handleFilterChange('location', e.target.value)}
-            />
-          </div>
-
-          <div className="filter-group">
-            <label>Industry</label>
-            <input
-              type="text"
-              placeholder="e.g. Fintech"
-              value={filters.industry}
-              onChange={(e) => handleFilterChange('industry', e.target.value)}
-            />
-          </div>
-
-          <div className="filter-group">
-            <label>Education</label>
-            <input
-              type="text"
-              placeholder="e.g. B.Tech"
-              value={filters.education}
-              onChange={(e) => handleFilterChange('education', e.target.value)}
-            />
-          </div>
-
-          <div className="filter-group">
-            <label>Notice Period</label>
-            <select
-              value={filters.noticePeriod}
-              onChange={(e) => handleFilterChange('noticePeriod', e.target.value)}
-            >
-              <option value="">Any</option>
-              {NOTICE_PERIOD_OPTIONS.map((np) => (
-                <option key={np} value={np}>{np}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="filter-group">
-            <label>Skills (comma separated)</label>
-            <input
-              type="text"
-              placeholder="React, Node.js"
-              value={filters.skills}
-              onChange={(e) => handleFilterChange('skills', e.target.value)}
-            />
-          </div>
-
-          <button className="btn btn-primary btn-block" onClick={applyFilters}>
-            Apply Filters
-          </button>
-        </aside>
-
-        {/* Right: list */}
-        <section className="candidates-list">
-          {loading && <div className="loader">Loading candidates…</div>}
-          {error && <div className="alert alert-error">{error}</div>}
-
-          {!loading && data.length === 0 && (
-            <div className="empty-state">
-              <h3>No candidates found</h3>
-              <p>Try adjusting filters or clearing the search.</p>
-            </div>
-          )}
-
-          {!loading && data.length > 0 && (
-            <div className="table-wrap">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Current Employer</th>
-                    <th>Experience</th>
-                    <th>Skills</th>
-                    <th>Location</th>
-                    <th>Status</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.map((c) => (
-                    <tr key={c._id}>
-                      <td>
-                        <div className="cell-primary">{c.name}</div>
-                        <div className="cell-sub">{c.email}</div>
-                      </td>
-                      <td>{c.currentEmployer || '—'}</td>
-                      <td>{c.experience} yrs</td>
-                      <td>
-                        <div className="skill-chips">
-                          {(c.keySkills || []).slice(0, 3).map((s) => (
-                            <span key={s} className="chip">{s}</span>
-                          ))}
-                          {(c.keySkills || []).length > 3 && (
-                            <span className="chip chip-muted">
-                              +{c.keySkills.length - 3}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td>{c.location || '—'}</td>
-                      <td><StatusBadge status={c.status} /></td>
-                      <td>
-                        <Link
-                          to={`/admin/candidate/${c._id}`}
-                          className="btn btn-outline btn-sm"
-                        >
-                          View
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          <Pagination
-            page={pagination.page}
-            totalPages={pagination.totalPages}
-            onChange={setPage}
-          />
-        </section>
-      </div>
+      <ConfirmModal
+        open={deleteModal.open}
+        title={deleteModal.mode === 'bulk' ? 'Delete selected candidates?' : 'Delete candidate?'}
+        message={
+          deleteModal.mode === 'bulk'
+            ? `This will permanently delete ${deleteModal.count} candidate(s) and their resume files. This cannot be undone.`
+            : 'This will permanently delete this candidate and their resume file. This cannot be undone.'
+        }
+        confirmLabel="Delete"
+        danger
+        loading={deleting}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteModal({ open: false, mode: 'single', id: null, count: 0 })}
+      />
     </Layout>
   );
 };

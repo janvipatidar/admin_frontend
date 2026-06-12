@@ -1,10 +1,12 @@
 // Manual candidate entry from the admin side
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 
 import api from '../api/api';
 import Layout from '../components/Layout';
+import { INDIA_STATES, getCitiesForState } from '../data/indiaLocations';
+import { isOtherCity } from '../utils/city';
 import { validateCandidateForm } from '../utils/validation';
 
 const STATUS_OPTIONS = [
@@ -16,10 +18,19 @@ const STATUS_OPTIONS = [
   'On Hold'
 ];
 
+const MAX_RESUME_MB = 5;
+const ALLOWED_RESUME_TYPES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+];
+
 const emptyForm = {
   name: '',
   email: '',
   phone: '',
+  designation: '',
+  currentCTC: '',
   dateOfBirth: '',
   education: '',
   experience: '',
@@ -28,9 +39,9 @@ const emptyForm = {
   previousEmployer: '',
   keySkills: '',
   currentIndustry: '',
-  location: '',
+  state: '',
+  city: '',
   expectedSalary: '',
-  resumeUrl: '',
   status: 'Applied',
   notes: ''
 };
@@ -38,18 +49,44 @@ const emptyForm = {
 const AddCandidate = () => {
   const navigate = useNavigate();
   const [form, setForm] = useState(emptyForm);
+  const [customCity, setCustomCity] = useState('');
+  const [resumeFile, setResumeFile] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  const cityOptions = useMemo(
+    () => (form.state ? getCitiesForState(form.state) : []),
+    [form.state]
+  );
+
   const handleChange = (key, value) => {
     setForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleResumeChange = (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) {
+      setResumeFile(null);
+      return;
+    }
+    if (!ALLOWED_RESUME_TYPES.includes(file.type)) {
+      toast.error('Only PDF, DOC, and DOCX files are allowed');
+      e.target.value = '';
+      return;
+    }
+    if (file.size > MAX_RESUME_MB * 1024 * 1024) {
+      toast.error(`File must be under ${MAX_RESUME_MB}MB`);
+      e.target.value = '';
+      return;
+    }
+    setResumeFile(file);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
 
-    const validationErrors = validateCandidateForm(form);
+    const validationErrors = validateCandidateForm({ ...form, customCity });
     if (validationErrors.length) {
       validationErrors.forEach((msg) => toast.error(msg));
       return;
@@ -57,7 +94,16 @@ const AddCandidate = () => {
 
     setSaving(true);
     try {
-      const res = await api.post('/api/admin/candidate', form);
+      const body = new FormData();
+      Object.entries(form).forEach(([key, value]) => {
+        if (value !== '' && value != null) body.append(key, value);
+      });
+      if (isOtherCity(form.city)) {
+        body.append('customCity', customCity.trim());
+      }
+      if (resumeFile) body.append('resume', resumeFile);
+
+      const res = await api.post('/api/admin/candidate', body);
       const id = res.data.candidate && res.data.candidate._id;
       toast.success('Candidate created');
       navigate(id ? `/admin/candidate/${id}` : '/admin/candidates');
@@ -84,127 +130,113 @@ const AddCandidate = () => {
       <form className="card" onSubmit={handleSubmit}>
         <div className="form-grid">
           <Field label="Name *">
-            <input
-              required
-              value={form.name}
-              onChange={(e) => handleChange('name', e.target.value)}
-            />
+            <input required value={form.name} onChange={(e) => handleChange('name', e.target.value)} />
           </Field>
           <Field label="Email *">
-            <input
-              required
-              type="email"
-              value={form.email}
-              onChange={(e) => handleChange('email', e.target.value)}
-            />
+            <input required type="email" value={form.email} onChange={(e) => handleChange('email', e.target.value)} />
           </Field>
           <Field label="Phone *">
-            <input
-              required
-              value={form.phone}
-              onChange={(e) => handleChange('phone', e.target.value)}
-            />
+            <input required value={form.phone} onChange={(e) => handleChange('phone', e.target.value)} placeholder="10-digit mobile" />
+          </Field>
+          <Field label="Designation *">
+            <input required value={form.designation} onChange={(e) => handleChange('designation', e.target.value)} placeholder="e.g. Software Engineer" />
+          </Field>
+          <Field label="Current CTC (LPA) *">
+            <input required type="number" min="0" step="0.1" value={form.currentCTC} onChange={(e) => handleChange('currentCTC', e.target.value)} />
           </Field>
           <Field label="Date of Birth">
-            <input
-              type="date"
-              value={form.dateOfBirth}
-              onChange={(e) => handleChange('dateOfBirth', e.target.value)}
-            />
+            <input type="date" value={form.dateOfBirth} onChange={(e) => handleChange('dateOfBirth', e.target.value)} />
           </Field>
           <Field label="Education">
-            <input
-              value={form.education}
-              onChange={(e) => handleChange('education', e.target.value)}
-              placeholder="e.g. B.Tech CS, IIT Delhi"
-            />
+            <input value={form.education} onChange={(e) => handleChange('education', e.target.value)} />
           </Field>
           <Field label="Experience (years)">
-            <input
-              type="number"
-              min="0"
-              value={form.experience}
-              onChange={(e) => handleChange('experience', e.target.value)}
-            />
+            <input type="number" min="0" value={form.experience} onChange={(e) => handleChange('experience', e.target.value)} />
           </Field>
           <Field label="Notice Period">
-            <input
-              value={form.noticePeriod}
-              onChange={(e) => handleChange('noticePeriod', e.target.value)}
-              placeholder="e.g. 30 days"
-            />
+            <input value={form.noticePeriod} onChange={(e) => handleChange('noticePeriod', e.target.value)} />
           </Field>
           <Field label="Current Employer">
-            <input
-              value={form.currentEmployer}
-              onChange={(e) => handleChange('currentEmployer', e.target.value)}
-            />
+            <input value={form.currentEmployer} onChange={(e) => handleChange('currentEmployer', e.target.value)} />
           </Field>
           <Field label="Previous Employer">
-            <input
-              value={form.previousEmployer}
-              onChange={(e) => handleChange('previousEmployer', e.target.value)}
-            />
+            <input value={form.previousEmployer} onChange={(e) => handleChange('previousEmployer', e.target.value)} />
           </Field>
           <Field label="Industry">
-            <input
-              value={form.currentIndustry}
-              onChange={(e) => handleChange('currentIndustry', e.target.value)}
-            />
+            <input value={form.currentIndustry} onChange={(e) => handleChange('currentIndustry', e.target.value)} />
           </Field>
-          <Field label="Location">
-            <input
-              value={form.location}
-              onChange={(e) => handleChange('location', e.target.value)}
-            />
+          <Field label="State *">
+            <select
+              required
+              value={form.state}
+              onChange={(e) => {
+                setForm((prev) => ({ ...prev, state: e.target.value, city: '' }));
+                setCustomCity('');
+              }}
+            >
+              <option value="">Select state</option>
+              {INDIA_STATES.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
           </Field>
+          <Field label="City *">
+            <select
+              required
+              value={form.city}
+              disabled={!form.state}
+              onChange={(e) => {
+                const next = e.target.value;
+                handleChange('city', next);
+                if (!isOtherCity(next)) setCustomCity('');
+              }}
+            >
+              <option value="">{form.state ? 'Select city' : 'Select state first'}</option>
+              {cityOptions.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </Field>
+          {isOtherCity(form.city) && (
+            <Field label="Custom city *">
+              <input
+                required
+                value={customCity}
+                onChange={(e) => setCustomCity(e.target.value)}
+                placeholder="Enter city name"
+              />
+            </Field>
+          )}
           <Field label="Expected Salary">
-            <input
-              type="number"
-              min="0"
-              value={form.expectedSalary}
-              onChange={(e) => handleChange('expectedSalary', e.target.value)}
-            />
+            <input type="number" min="0" value={form.expectedSalary} onChange={(e) => handleChange('expectedSalary', e.target.value)} />
           </Field>
           <Field label="Key Skills (comma separated)" full>
-            <input
-              value={form.keySkills}
-              onChange={(e) => handleChange('keySkills', e.target.value)}
-              placeholder="React, Node.js, MongoDB"
-            />
+            <input value={form.keySkills} onChange={(e) => handleChange('keySkills', e.target.value)} placeholder="React, Node.js" />
           </Field>
-          <Field label="Resume URL" full>
-            <input
-              value={form.resumeUrl}
-              onChange={(e) => handleChange('resumeUrl', e.target.value)}
-              placeholder="https://…"
-            />
+          <Field label="Resume (PDF / DOC / DOCX, max 5MB)" full>
+            <input type="file" accept=".pdf,.doc,.docx" onChange={handleResumeChange} />
+            {resumeFile && (
+              <p className="muted" style={{ marginTop: 8 }}>
+                Selected: <strong>{resumeFile.name}</strong>
+              </p>
+            )}
           </Field>
           <Field label="Status">
-            <select
-              value={form.status}
-              onChange={(e) => handleChange('status', e.target.value)}
-            >
+            <select value={form.status} onChange={(e) => handleChange('status', e.target.value)}>
               {STATUS_OPTIONS.map((s) => (
                 <option key={s} value={s}>{s}</option>
               ))}
             </select>
           </Field>
           <Field label="Notes" full>
-            <textarea
-              rows={4}
-              value={form.notes}
-              onChange={(e) => handleChange('notes', e.target.value)}
-            />
+            <textarea rows={4} value={form.notes} onChange={(e) => handleChange('notes', e.target.value)} />
           </Field>
         </div>
 
         {error && <div className="alert alert-error">{error}</div>}
 
         <div className="form-actions">
-          <button type="button" className="btn btn-outline" onClick={() => navigate(-1)}>
-            Cancel
-          </button>
+          <button type="button" className="btn btn-outline" onClick={() => navigate(-1)}>Cancel</button>
           <button type="submit" className="btn btn-primary" disabled={saving}>
             {saving ? 'Creating…' : 'Create Candidate'}
           </button>

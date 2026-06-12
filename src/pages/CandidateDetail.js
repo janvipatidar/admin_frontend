@@ -5,6 +5,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 
 import api from '../api/api';
+import ConfirmModal from '../components/ConfirmModal';
 import Layout from '../components/Layout';
 import StatusBadge from '../components/StatusBadge';
 import { getResumeFileName, getResumeUrl } from '../utils/mediaUrl';
@@ -30,6 +31,8 @@ const CandidateDetail = () => {
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState('');
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -68,7 +71,7 @@ const CandidateDetail = () => {
   };
 
   const handleDelete = async () => {
-    if (!window.confirm('Delete this candidate? This cannot be undone.')) return;
+    setDeleting(true);
     try {
       await api.delete(`/api/admin/candidate/${id}`);
       toast.success('Candidate deleted');
@@ -76,6 +79,9 @@ const CandidateDetail = () => {
     } catch (err) {
       setError('Failed to delete');
       toast.error('Failed to delete candidate');
+    } finally {
+      setDeleting(false);
+      setDeleteOpen(false);
     }
   };
 
@@ -105,7 +111,7 @@ const CandidateDetail = () => {
         </div>
         <div className="page-header-actions">
           <Link to="/admin/candidates" className="btn btn-outline">← Back</Link>
-          <button className="btn btn-danger" onClick={handleDelete}>Delete</button>
+          <button className="btn btn-danger" onClick={() => setDeleteOpen(true)}>Delete</button>
         </div>
       </div>
 
@@ -118,6 +124,8 @@ const CandidateDetail = () => {
               <StatusBadge status={candidate.status} />
             </div>
             <div className="info-grid">
+              <Info label="Designation" value={candidate.designation} />
+              <Info label="Current CTC" value={candidate.currentCTC ? `${candidate.currentCTC} LPA` : '—'} />
               <Info label="Education" value={candidate.education} />
               <Info label="Experience" value={`${candidate.experience} years`} />
               <Info label="Notice Period" value={candidate.noticePeriod} />
@@ -212,6 +220,17 @@ const CandidateDetail = () => {
           </div>
         </div>
       </div>
+
+      <ConfirmModal
+        open={deleteOpen}
+        title="Delete candidate?"
+        message="This will permanently delete this candidate and their resume file. This cannot be undone."
+        confirmLabel="Delete"
+        danger
+        loading={deleting}
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteOpen(false)}
+      />
     </Layout>
   );
 };

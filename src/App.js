@@ -6,6 +6,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import AddCandidate from './pages/AddCandidate';
 import CandidateDetail from './pages/CandidateDetail';
 import Candidates from './pages/Candidates';
+import CandidateSearch from './pages/CandidateSearch';
 import Contacts from './pages/Contacts';
 import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
@@ -29,6 +30,14 @@ const App = () => (
       element={
         <ProtectedRoute>
           <Candidates />
+        </ProtectedRoute>
+      }
+    />
+    <Route
+      path="/admin/candidates/search"
+      element={
+        <ProtectedRoute>
+          <CandidateSearch />
         </ProtectedRoute>
       }
     />
