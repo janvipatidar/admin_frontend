@@ -6,6 +6,12 @@ import toast from 'react-hot-toast';
 import api from '../api/api';
 import Layout from '../components/Layout';
 import { INDIA_STATES, getCitiesForState } from '../data/indiaLocations';
+import {
+  EDUCATION_OPTIONS,
+  INDUSTRY_OPTIONS,
+  NOTICE_PERIOD_OPTIONS,
+  withLegacyOption
+} from '../constants/candidateOptions';
 import { isOtherCity } from '../utils/city';
 import { validateCandidateForm } from '../utils/validation';
 
@@ -147,14 +153,31 @@ const AddCandidate = () => {
           <Field label="Date of Birth">
             <input type="date" value={form.dateOfBirth} onChange={(e) => handleChange('dateOfBirth', e.target.value)} />
           </Field>
-          <Field label="Education">
-            <input value={form.education} onChange={(e) => handleChange('education', e.target.value)} />
+          <Field label="Education *">
+            <select
+              required
+              value={form.education}
+              onChange={(e) => handleChange('education', e.target.value)}
+            >
+              <option value="">Select education</option>
+              {withLegacyOption(EDUCATION_OPTIONS, form.education).map((opt) => (
+                <option key={opt} value={opt}>{opt}</option>
+              ))}
+            </select>
           </Field>
           <Field label="Experience (years)">
             <input type="number" min="0" value={form.experience} onChange={(e) => handleChange('experience', e.target.value)} />
           </Field>
           <Field label="Notice Period">
-            <input value={form.noticePeriod} onChange={(e) => handleChange('noticePeriod', e.target.value)} />
+            <select
+              value={form.noticePeriod}
+              onChange={(e) => handleChange('noticePeriod', e.target.value)}
+            >
+              <option value="">Select notice period</option>
+              {withLegacyOption(NOTICE_PERIOD_OPTIONS, form.noticePeriod).map((opt) => (
+                <option key={opt} value={opt}>{opt}</option>
+              ))}
+            </select>
           </Field>
           <Field label="Current Employer">
             <input value={form.currentEmployer} onChange={(e) => handleChange('currentEmployer', e.target.value)} />
@@ -163,7 +186,15 @@ const AddCandidate = () => {
             <input value={form.previousEmployer} onChange={(e) => handleChange('previousEmployer', e.target.value)} />
           </Field>
           <Field label="Industry">
-            <input value={form.currentIndustry} onChange={(e) => handleChange('currentIndustry', e.target.value)} />
+            <select
+              value={form.currentIndustry}
+              onChange={(e) => handleChange('currentIndustry', e.target.value)}
+            >
+              <option value="">Select industry</option>
+              {withLegacyOption(INDUSTRY_OPTIONS, form.currentIndustry).map((opt) => (
+                <option key={opt} value={opt}>{opt}</option>
+              ))}
+            </select>
           </Field>
           <Field label="State *">
             <select

@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 
 import api from '../api/api';
 import ConfirmModal from '../components/ConfirmModal';
+import CandidateComments from '../components/CandidateComments';
 import Layout from '../components/Layout';
 import StatusBadge from '../components/StatusBadge';
 import { getResumeFileName, getResumeUrl } from '../utils/mediaUrl';
@@ -184,6 +185,8 @@ const CandidateDetail = () => {
               <span className="muted">No resume uploaded</span>
             )}
           </div>
+
+          <CandidateComments candidateId={id} />
         </div>
 
         {/* Right: actions */}

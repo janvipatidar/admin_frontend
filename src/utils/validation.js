@@ -30,5 +30,6 @@ export const validateCandidateForm = (data) => {
   if (isOtherCity(data.city) && !String(data.customCity || '').trim()) {
     errors.push('Custom city is required when Other is selected');
   }
+  if (!data.education) errors.push('Please select education');
   return errors;
 };
