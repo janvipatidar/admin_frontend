@@ -1,4 +1,4 @@
-// Full candidate profile + status update + notes
+// Full candidate profile + status update + comments
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
@@ -29,7 +29,6 @@ const CandidateDetail = () => {
   const [error, setError] = useState('');
 
   const [status, setStatus] = useState('');
-  const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState('');
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -41,7 +40,6 @@ const CandidateDetail = () => {
       const res = await api.get(`/api/admin/candidate/${id}`);
       setCandidate(res.data);
       setStatus(res.data.status || 'Applied');
-      setNotes(res.data.notes || '');
     } catch (err) {
       setError('Failed to load candidate');
     } finally {
@@ -58,7 +56,7 @@ const CandidateDetail = () => {
     setSaving(true);
     setSavedMsg('');
     try {
-      const res = await api.put(`/api/admin/candidate/${id}`, { status, notes });
+      const res = await api.put(`/api/admin/candidate/${id}`, { status });
       setCandidate(res.data.candidate);
       setSavedMsg('Saved');
       toast.success('Changes saved');
@@ -200,16 +198,6 @@ const CandidateDetail = () => {
                   <option key={s} value={s}>{s}</option>
                 ))}
               </select>
-            </div>
-
-            <div className="field">
-              <span>Notes</span>
-              <textarea
-                rows={6}
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Internal notes about this candidate…"
-              />
             </div>
 
             <button

@@ -7,9 +7,22 @@ import toast from 'react-hot-toast';
 
 import api from '../api/api';
 import ConfirmModal from '../components/ConfirmModal';
+import ImportSummaryModal from '../components/ImportSummaryModal';
 import Layout from '../components/Layout';
 import Pagination from '../components/Pagination';
-import { getResumeFileName, getResumeUrl } from '../utils/mediaUrl';
+import StatusBadge from '../components/StatusBadge';
+import { EXCEL_SHEET_NAME, candidateToExportRow } from '../constants/excelTemplate';
+
+const CellEllipsis = ({ value, title }) => {
+  const display = value || '—';
+  return (
+    <td>
+      <span className="cell-ellipsis" title={title || (display !== '—' ? String(display) : '')}>
+        {display}
+      </span>
+    </td>
+  );
+};
 
 const Candidates = () => {
   const importInputRef = useRef(null);
@@ -18,6 +31,8 @@ const Candidates = () => {
   const [data, setData] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0 });
   const [loading, setLoading] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importSummary, setImportSummary] = useState(null);
   const [selectedIds, setSelectedIds] = useState([]);
   const [deleteModal, setDeleteModal] = useState({ open: false, mode: 'single', id: null, count: 0 });
   const [deleting, setDeleting] = useState(false);
@@ -101,33 +116,9 @@ const Candidates = () => {
         return;
       }
 
-      const ws = XLSX.utils.json_to_sheet(
-        rows.map((c) => ({
-          Name: c.name || '',
-          Email: c.email || '',
-          Phone: c.phone || '',
-          Designation: c.designation || '',
-          'Current CTC': c.currentCTC != null ? c.currentCTC : '',
-          Education: c.education || '',
-          'Experience (yrs)': c.experience != null ? c.experience : '',
-          'Notice Period': c.noticePeriod || '',
-          'Current Employer': c.currentEmployer || '',
-          'Previous Employer': c.previousEmployer || '',
-          Industry: c.currentIndustry || '',
-          State: c.state || '',
-          City: c.city || '',
-          Location: c.location || '',
-          'Expected Salary': c.expectedSalary != null ? c.expectedSalary : '',
-          Skills: Array.isArray(c.keySkills) ? c.keySkills.join(', ') : '',
-          Status: c.status || '',
-          Active: c.isActive ? 'Yes' : 'No',
-          Resume: c.resumeUrl || '',
-          Notes: c.notes || '',
-          'Created At': c.createdAt ? new Date(c.createdAt).toLocaleDateString() : ''
-        }))
-      );
+      const ws = XLSX.utils.json_to_sheet(rows.map(candidateToExportRow));
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Candidates');
+      XLSX.utils.book_append_sheet(wb, ws, EXCEL_SHEET_NAME);
       const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
       saveAs(
         new Blob([buffer], {
@@ -144,29 +135,43 @@ const Candidates = () => {
   const importExcel = async (e) => {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
+    setImporting(true);
     try {
       const buffer = await file.arrayBuffer();
       const wb = XLSX.read(buffer, { type: 'array' });
-      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const sheetName = wb.SheetNames.includes(EXCEL_SHEET_NAME)
+        ? EXCEL_SHEET_NAME
+        : wb.SheetNames[0];
+      const sheet = wb.Sheets[sheetName];
       const rows = XLSX.utils.sheet_to_json(sheet);
       if (!rows.length) {
         toast.error('Excel file has no data rows');
         return;
       }
       const res = await api.post('/api/admin/candidates/import', { candidates: rows });
-      toast.success(res.data.message || 'Import completed');
-      if (res.data.failed > 0) toast.error(`${res.data.failed} row(s) failed`);
+      setImportSummary({
+        message: res.data.message,
+        imported: res.data.imported ?? res.data.created ?? 0,
+        skipped: res.data.skipped ?? 0,
+        duplicates: res.data.duplicates ?? 0,
+        failed: res.data.failed ?? 0,
+        failures: res.data.failures || [],
+        duplicateRows: res.data.duplicateRows || [],
+        skippedRows: res.data.skippedRows || []
+      });
+      if ((res.data.imported ?? res.data.created ?? 0) > 0) {
+        toast.success(res.data.message);
+      }
       fetchCandidates();
     } catch (err) {
       toast.error(
         (err.response && err.response.data && err.response.data.message) || 'Import failed'
       );
     } finally {
+      setImporting(false);
       e.target.value = '';
     }
   };
-
-  const formatDate = (d) => (d ? new Date(d).toLocaleDateString() : '—');
 
   return (
     <Layout>
@@ -202,9 +207,10 @@ const Candidates = () => {
           <button
             type="button"
             className="btn btn-outline"
+            disabled={importing}
             onClick={() => importInputRef.current && importInputRef.current.click()}
           >
-            Import Excel
+            {importing ? 'Importing…' : 'Import Excel'}
           </button>
           <button type="button" className="btn btn-outline" onClick={exportExcel}>
             Export Excel
@@ -222,11 +228,11 @@ const Candidates = () => {
       )}
 
       {!loading && data.length > 0 && (
-        <div className="table-wrap card">
-          <table className="data-table">
+        <div className="table-wrap card candidates-table-wrap">
+          <table className="data-table candidates-table">
             <thead>
               <tr>
-                <th style={{ width: 40 }}>
+                <th className="col-check">
                   <input
                     type="checkbox"
                     checked={selectedIds.length === data.length && data.length > 0}
@@ -234,23 +240,20 @@ const Candidates = () => {
                     aria-label="Select all"
                   />
                 </th>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Mobile</th>
-                <th>Skills</th>
-                <th>Exp.</th>
-                <th>Designation</th>
-                <th>Current CTC</th>
-                <th>Location</th>
-                <th>Resume</th>
-                <th>Created</th>
-                <th>Actions</th>
+                <th className="col-name">Name</th>
+                <th className="col-industry">Industry</th>
+                <th className="col-education">Education</th>
+                <th className="col-exp">Experience</th>
+                <th className="col-notice">Notice Period</th>
+                <th className="col-comments">Comments</th>
+                <th className="col-status">Status</th>
+                <th className="col-actions">Action</th>
               </tr>
             </thead>
             <tbody>
               {data.map((c) => (
                 <tr key={c._id}>
-                  <td>
+                  <td className="col-check">
                     <input
                       type="checkbox"
                       checked={selectedIds.includes(c._id)}
@@ -258,41 +261,32 @@ const Candidates = () => {
                       aria-label={`Select ${c.name}`}
                     />
                   </td>
-                  <td>
-                    <div className="cell-primary">{c.name}</div>
-                  </td>
-                  <td>{c.email}</td>
-                  <td>{c.phone}</td>
-                  <td>
-                    <div className="skill-chips">
-                      {(c.keySkills || []).slice(0, 2).map((s) => (
-                        <span key={s} className="chip">{s}</span>
-                      ))}
-                      {(c.keySkills || []).length > 2 && (
-                        <span className="chip chip-muted">+{c.keySkills.length - 2}</span>
-                      )}
+                  <td className="col-name">
+                    <div className="cell-primary cell-ellipsis" title={c.name}>
+                      {c.name}
+                    </div>
+                    <div className="cell-sub cell-ellipsis" title={`${c.email} · ${c.phone}`}>
+                      {c.email} · {c.phone}
                     </div>
                   </td>
-                  <td>{c.experience} yrs</td>
-                  <td>{c.designation || '—'}</td>
-                  <td>{c.currentCTC ? `${c.currentCTC} LPA` : '—'}</td>
-                  <td>{c.location || c.city || '—'}</td>
-                  <td>
-                    {c.resumeUrl ? (
-                      <a
-                        href={getResumeUrl(c.resumeUrl)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="link-btn"
-                      >
-                        {getResumeFileName(c.resumeUrl)}
-                      </a>
-                    ) : (
-                      '—'
-                    )}
+                  <CellEllipsis value={c.currentIndustry} />
+                  <CellEllipsis value={c.education} />
+                  <td className="col-exp">{c.experience != null ? `${c.experience} yrs` : '—'}</td>
+                  <CellEllipsis value={c.noticePeriod} />
+                  <td className="col-comments">
+                    <span
+                      className="cell-ellipsis"
+                      title={c.latestComment || (c.commentCount ? `${c.commentCount} comment(s)` : 'No comments yet')}
+                    >
+                      {c.commentCount > 0
+                        ? `${c.commentCount} · ${c.latestComment || 'View'}`
+                        : '—'}
+                    </span>
                   </td>
-                  <td>{formatDate(c.createdAt)}</td>
-                  <td>
+                  <td className="col-status">
+                    <StatusBadge status={c.status} />
+                  </td>
+                  <td className="col-actions">
                     <div className="row-actions">
                       <Link to={`/admin/candidate/${c._id}`} className="btn btn-outline btn-sm">
                         View
@@ -328,6 +322,12 @@ const Candidates = () => {
         loading={deleting}
         onConfirm={handleConfirmDelete}
         onCancel={() => setDeleteModal({ open: false, mode: 'single', id: null, count: 0 })}
+      />
+
+      <ImportSummaryModal
+        open={!!importSummary}
+        summary={importSummary}
+        onClose={() => setImportSummary(null)}
       />
     </Layout>
   );

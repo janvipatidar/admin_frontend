@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 
 import api from '../api/api';
+import CandidateComments from '../components/CandidateComments';
 import Layout from '../components/Layout';
 import { INDIA_STATES, getCitiesForState } from '../data/indiaLocations';
 import {
@@ -48,14 +49,14 @@ const emptyForm = {
   state: '',
   city: '',
   expectedSalary: '',
-  status: 'Applied',
-  notes: ''
+  status: 'Applied'
 };
 
 const AddCandidate = () => {
   const navigate = useNavigate();
   const [form, setForm] = useState(emptyForm);
   const [customCity, setCustomCity] = useState('');
+  const [draftComments, setDraftComments] = useState([]);
   const [resumeFile, setResumeFile] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -88,6 +89,19 @@ const AddCandidate = () => {
     setResumeFile(file);
   };
 
+  const postDraftComments = async (candidateId) => {
+    for (const item of draftComments) {
+      const text = String(item.comment || '').trim();
+      if (!text) continue;
+      try {
+        await api.post(`/api/admin/candidate/${candidateId}/comments`, { comment: text });
+      } catch {
+        toast.error('Some comments could not be saved');
+        break;
+      }
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -111,6 +125,11 @@ const AddCandidate = () => {
 
       const res = await api.post('/api/admin/candidate', body);
       const id = res.data.candidate && res.data.candidate._id;
+
+      if (id && draftComments.length) {
+        await postDraftComments(id);
+      }
+
       toast.success('Candidate created');
       navigate(id ? `/admin/candidate/${id}` : '/admin/candidates');
     } catch (err) {
@@ -259,10 +278,13 @@ const AddCandidate = () => {
               ))}
             </select>
           </Field>
-          <Field label="Notes" full>
-            <textarea rows={4} value={form.notes} onChange={(e) => handleChange('notes', e.target.value)} />
-          </Field>
         </div>
+
+        <CandidateComments
+          draftComments={draftComments}
+          onDraftChange={setDraftComments}
+          embedded
+        />
 
         {error && <div className="alert alert-error">{error}</div>}
 

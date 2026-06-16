@@ -583,7 +583,7 @@ const CandidateSearch = () => {
                 <aside className="rdx-card-side">
                   <div className="rdx-avatar">👤</div>
                   <p className="rdx-card-summary">
-                    {c.notes || `${c.designation || 'Professional'} with ${formatExp(c.experience)} experience.`}
+                    {`${c.designation || 'Professional'} with ${formatExp(c.experience)} experience.`}
                   </p>
                   <a href={`tel:${c.phone}`} className="rdx-btn-outline rdx-btn-full">📞 {c.phone}</a>
                   <Link to={`/admin/candidate/${c._id}`} className="rdx-btn-primary rdx-btn-full">
