@@ -1,7 +1,6 @@
 export const EXCEL_SHEET_NAME = 'Candidates';
 
 export const EXCEL_COLUMNS = [
-  'Candidate ID',
   'Name',
   'Email',
   'Phone',
@@ -25,7 +24,6 @@ export const EXCEL_COLUMNS = [
 ];
 
 export const candidateToExportRow = (c) => ({
-  'Candidate ID': c._id || '',
   Name: c.name || '',
   Email: c.email || '',
   Phone: c.phone || '',

@@ -372,7 +372,7 @@ textarea { resize: vertical; }
 }
 .data-table {
   width: 100%;
-  min-width: 960px;
+  min-width: 820px;
   border-collapse: collapse;
   table-layout: fixed;
 }
@@ -394,15 +394,14 @@ textarea { resize: vertical; }
   z-index: 1;
 }
 .data-table tr:hover td { background: #fafbfd; }
-.candidates-table .col-check { width: 42px; }
-.candidates-table .col-name { width: 18%; min-width: 140px; }
-.candidates-table .col-industry { width: 12%; }
-.candidates-table .col-education { width: 10%; }
+.candidates-table .col-check { width: 40px; }
+.candidates-table .col-name { width: 16%; min-width: 130px; }
+.candidates-table .col-designation { width: 14%; }
+.candidates-table .col-company { width: 14%; }
 .candidates-table .col-exp { width: 8%; }
-.candidates-table .col-notice { width: 11%; }
-.candidates-table .col-comments { width: 16%; }
-.candidates-table .col-status { width: 10%; }
-.candidates-table .col-actions { width: 120px; }
+.candidates-table .col-location { width: 14%; }
+.candidates-table .col-comments { width: 22%; }
+.candidates-table .col-actions { width: 110px; }
 .cell-ellipsis {
   display: block;
   overflow: hidden;
@@ -745,7 +744,7 @@ textarea { resize: vertical; }
 
 @media (max-width: 720px) {
   .app-shell { flex-direction: column; }
-  .candidates-table { min-width: 880px; }
+  .candidates-table { min-width: 720px; }
   .data-table th, .data-table td { padding: 8px 10px; font-size: 12px; }
   .sidebar {
     width: 100%;

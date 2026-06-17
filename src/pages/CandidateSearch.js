@@ -40,7 +40,7 @@ const SORT_OPTIONS = [
   { value: 'name', label: 'Name' },
   { value: 'designation', label: 'Designation' }
 ];
-const SHOW_OPTIONS = [20, 40, 60];
+const SHOW_OPTIONS = [20, 40, 60, 160];
 
 const initialFilters = {
   includeKeywords: '',

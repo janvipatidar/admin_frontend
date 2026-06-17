@@ -10,8 +10,27 @@ import ConfirmModal from '../components/ConfirmModal';
 import ImportSummaryModal from '../components/ImportSummaryModal';
 import Layout from '../components/Layout';
 import Pagination from '../components/Pagination';
-import StatusBadge from '../components/StatusBadge';
 import { EXCEL_SHEET_NAME, candidateToExportRow } from '../constants/excelTemplate';
+
+const formatPhone = (phone) => {
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (digits.length === 10) {
+    return `+91 ${digits.slice(0, 5)} ${digits.slice(5)}`;
+  }
+  if (digits.length === 12 && digits.startsWith('91')) {
+    return `+91 ${digits.slice(2, 7)} ${digits.slice(7)}`;
+  }
+  return phone || '—';
+};
+
+const formatLocation = (c) => {
+  if (c.location) return c.location;
+  if (c.city && c.state) return `${c.city}, ${c.state}`;
+  return c.city || c.state || '—';
+};
+
+const formatExperience = (exp) =>
+  exp != null && exp !== '' ? `${exp} yrs` : '—';
 
 const CellEllipsis = ({ value, title }) => {
   const display = value || '—';
@@ -241,12 +260,11 @@ const Candidates = () => {
                   />
                 </th>
                 <th className="col-name">Name</th>
-                <th className="col-industry">Industry</th>
-                <th className="col-education">Education</th>
+                <th className="col-designation">Current Designation</th>
+                <th className="col-company">Current Company</th>
                 <th className="col-exp">Experience</th>
-                <th className="col-notice">Notice Period</th>
-                <th className="col-comments">Comments</th>
-                <th className="col-status">Status</th>
+                <th className="col-location">Location</th>
+                <th className="col-comments">Latest Comment</th>
                 <th className="col-actions">Action</th>
               </tr>
             </thead>
@@ -265,26 +283,21 @@ const Candidates = () => {
                     <div className="cell-primary cell-ellipsis" title={c.name}>
                       {c.name}
                     </div>
-                    <div className="cell-sub cell-ellipsis" title={`${c.email} · ${c.phone}`}>
-                      {c.email} · {c.phone}
+                    <div className="cell-sub cell-ellipsis" title={formatPhone(c.phone)}>
+                      {formatPhone(c.phone)}
                     </div>
                   </td>
-                  <CellEllipsis value={c.currentIndustry} />
-                  <CellEllipsis value={c.education} />
-                  <td className="col-exp">{c.experience != null ? `${c.experience} yrs` : '—'}</td>
-                  <CellEllipsis value={c.noticePeriod} />
+                  <CellEllipsis value={c.designation} title={c.designation} />
+                  <CellEllipsis value={c.currentEmployer} title={c.currentEmployer} />
+                  <td className="col-exp">{formatExperience(c.experience)}</td>
+                  <CellEllipsis value={formatLocation(c)} title={formatLocation(c)} />
                   <td className="col-comments">
                     <span
                       className="cell-ellipsis"
-                      title={c.latestComment || (c.commentCount ? `${c.commentCount} comment(s)` : 'No comments yet')}
+                      title={c.latestComment || 'No comments'}
                     >
-                      {c.commentCount > 0
-                        ? `${c.commentCount} · ${c.latestComment || 'View'}`
-                        : '—'}
+                      {c.latestComment || 'No comments'}
                     </span>
-                  </td>
-                  <td className="col-status">
-                    <StatusBadge status={c.status} />
                   </td>
                   <td className="col-actions">
                     <div className="row-actions">
