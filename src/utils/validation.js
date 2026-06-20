@@ -20,11 +20,7 @@ export const validateCandidateForm = (data) => {
   if (!isValidEmail(data.email)) errors.push('Enter a valid email address');
   if (!isValidPhone(data.phone)) errors.push('Enter a valid 10-digit mobile number');
   if (!String(data.designation || '').trim()) errors.push('Designation is required');
-  if (data.currentCTC === undefined || data.currentCTC === null || data.currentCTC === '') {
-    errors.push('Current CTC is required');
-  } else if (Number.isNaN(Number(data.currentCTC)) || Number(data.currentCTC) < 0) {
-    errors.push('Current CTC must be a valid number');
-  }
+  if (!String(data.currentCTC || '').trim()) errors.push('Current CTC is required');
   if (!data.state) errors.push('Please select a state');
   if (!data.city) errors.push('Please select a city');
   if (isOtherCity(data.city) && !String(data.customCity || '').trim()) {

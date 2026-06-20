@@ -55,11 +55,15 @@ const Candidates = () => {
   const [selectedIds, setSelectedIds] = useState([]);
   const [deleteModal, setDeleteModal] = useState({ open: false, mode: 'single', id: null, count: 0 });
   const [deleting, setDeleting] = useState(false);
+  const [search, setSearch] = useState('');
+  const [searchInput, setSearchInput] = useState('');
 
   const fetchCandidates = async () => {
     setLoading(true);
     try {
-      const res = await api.get('/api/admin/candidates', { params: { page, limit } });
+      const params = { page, limit };
+      if (search.trim()) params.search = search.trim();
+      const res = await api.get('/api/admin/candidates', { params });
       setData(res.data.data);
       setPagination(res.data.pagination);
       setSelectedIds([]);
@@ -73,7 +77,15 @@ const Candidates = () => {
   useEffect(() => {
     fetchCandidates();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, limit]);
+  }, [page, limit, search]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearch(searchInput);
+      setPage(1);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
   const toggleSelectAll = (e) => {
     if (e.target.checked) {
@@ -237,12 +249,39 @@ const Candidates = () => {
         </div>
       </div>
 
+      <div className="candidates-search-bar card">
+        <input
+          type="search"
+          className="candidates-search-input"
+          placeholder="Search by name, email, mobile, experience, or location…"
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+          aria-label="Search candidates"
+        />
+        {searchInput && (
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            onClick={() => setSearchInput('')}
+          >
+            Clear
+          </button>
+        )}
+      </div>
+
       {loading && <div className="loader">Loading candidates…</div>}
 
-      {!loading && data.length === 0 && (
+      {!loading && data.length === 0 && !search && (
         <div className="empty-state card">
           <h3>No candidates yet</h3>
           <p>Add a candidate or import from Excel to get started.</p>
+        </div>
+      )}
+
+      {!loading && data.length === 0 && search && (
+        <div className="empty-state card">
+          <h3>No candidates found</h3>
+          <p>No results for &ldquo;{search}&rdquo;. Try a different search term.</p>
         </div>
       )}
 

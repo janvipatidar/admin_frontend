@@ -124,7 +124,7 @@ const CandidateDetail = () => {
             </div>
             <div className="info-grid">
               <Info label="Designation" value={candidate.designation} />
-              <Info label="Current CTC" value={candidate.currentCTC ? `${candidate.currentCTC} LPA` : '—'} />
+              <Info label="Current CTC" value={candidate.currentCTC} />
               <Info label="Education" value={candidate.education} />
               <Info label="Experience" value={`${candidate.experience} years`} />
               <Info label="Notice Period" value={candidate.noticePeriod} />

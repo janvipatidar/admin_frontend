@@ -82,7 +82,14 @@ const splitTags = (s) =>
 
 const joinTags = (arr) => arr.join(', ');
 
-const formatCTC = (ctc) => (ctc ? `₹ ${Number(ctc).toFixed(2)} Lacs` : '—');
+const formatCTC = (ctc) => {
+  if (!ctc && ctc !== 0) return '—';
+  const str = String(ctc).trim();
+  if (/lpa|lac|lacs|l\b|k\b/i.test(str)) return str;
+  const num = Number(str);
+  if (!Number.isNaN(num) && num > 0) return `₹ ${num.toFixed(2)} Lacs`;
+  return str;
+};
 const formatExp = (y) => `${Number(y) || 0} yr${Number(y) === 1 ? '' : 's'}`;
 
 const CandidateSearch = () => {

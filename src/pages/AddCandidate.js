@@ -166,8 +166,13 @@ const AddCandidate = () => {
           <Field label="Designation *">
             <input required value={form.designation} onChange={(e) => handleChange('designation', e.target.value)} placeholder="e.g. Software Engineer" />
           </Field>
-          <Field label="Current CTC (LPA) *">
-            <input required type="number" min="0" step="0.1" value={form.currentCTC} onChange={(e) => handleChange('currentCTC', e.target.value)} />
+          <Field label="Current CTC *">
+            <input
+              required
+              value={form.currentCTC}
+              onChange={(e) => handleChange('currentCTC', e.target.value)}
+              placeholder="e.g. 4 LPA, 4.5L, 8 Lakhs"
+            />
           </Field>
           <Field label="Date of Birth">
             <input type="date" value={form.dateOfBirth} onChange={(e) => handleChange('dateOfBirth', e.target.value)} />
